@@ -95,7 +95,24 @@ Switched to profile "work"
 
 ## Install
 
-### One-liner (clone + install)
+### npm (recommended)
+
+Global CLI — use from anywhere:
+
+```bash
+npm install -g ghsw
+```
+
+Then:
+
+```bash
+ghsw
+ghsw --help
+```
+
+> This is a **CLI tool**, not a library import. Install globally with `-g`.
+
+### From source (clone + install)
 
 ```bash
 git clone https://github.com/um1chc5/ghsw.git

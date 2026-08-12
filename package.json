@@ -6,9 +6,15 @@
   "bin": {
     "ghsw": "./cli.js"
   },
+  "files": [
+    "cli.js",
+    "lib/",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "start": "node cli.js"
+    "start": "node cli.js",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=18"
@@ -19,9 +25,20 @@
     "git",
     "cli",
     "accounts",
-    "switch"
+    "switch",
+    "github-switcher",
+    "multi-account"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/um1chc5/ghsw.git"
+  },
+  "homepage": "https://github.com/um1chc5/ghsw#readme",
+  "bugs": {
+    "url": "https://github.com/um1chc5/ghsw/issues"
+  },
+  "author": "um1chc5 (https://github.com/um1chc5)",
   "dependencies": {
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
