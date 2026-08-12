@@ -29,18 +29,34 @@ import {
   writeProfileGitconfig,
 } from './lib/git.js';
 import {
+  BACK,
   confirm,
+  isBack,
   promptAddProfile,
   promptEditProfile,
   promptFolderPath,
   promptMainMenu,
   promptSelectProfile,
 } from './lib/prompts.js';
+import {
+  emptyState,
+  errorBox,
+  goodbye,
+  infoBox,
+  kvTable,
+  printBanner,
+  printQuickStatus,
+  profileTable,
+  section,
+  success,
+  warnBox,
+  withSpinner,
+} from './lib/ui.js';
 
 const program = new Command();
 
 function fail(message) {
-  console.error(chalk.red(message));
+  errorBox(message);
   process.exitCode = 1;
 }
 
@@ -55,43 +71,41 @@ function requireGh() {
 /**
  * @param {import('./lib/profiles.js').Profile} profile
  */
-function applyProfile(profile) {
-  const switched = authSwitch(profile.username);
-  if (switched.missing) {
-    fail(ghMissingMessage());
-    return false;
-  }
-  if (!switched.ok) {
-    fail(
-      [
-        `Failed to switch gh auth to ${profile.username}.`,
-        switched.stderr || switched.stdout,
-        '',
-        'If this account is not logged in yet, run:',
-        `  ghsw add --login`,
-        'or:',
-        `  gh auth login --hostname github.com`,
-      ].join('\n')
-    );
-    return false;
-  }
-  setGlobalUser(profile.gitName, profile.email);
-  return true;
+async function applyProfile(profile) {
+  return withSpinner(`Switching to ${profile.username}…`, async () => {
+    const switched = authSwitch(profile.username);
+    if (switched.missing) {
+      throw new Error(ghMissingMessage());
+    }
+    if (!switched.ok) {
+      throw new Error(
+        [
+          `Failed to switch gh auth to ${profile.username}.`,
+          switched.stderr || switched.stdout,
+          '',
+          'Try: ghsw add --login',
+        ].join('\n')
+      );
+    }
+    setGlobalUser(profile.gitName, profile.email);
+    return true;
+  });
 }
 
-async function cmdAdd({ login = false } = {}) {
+async function cmdAdd({ login = false, interactive = false } = {}) {
   if (!requireGh()) return;
 
   const answers = await promptAddProfile();
+  if (isBack(answers)) return;
+
   const already = isUserLoggedIn(answers.username);
 
   if (login || !already) {
-    console.log(
-      chalk.cyan(
-        `\nLaunching gh auth login for GitHub user "${answers.username}"...\n` +
-          '(Choose HTTPS, complete browser/token login for this account.)\n'
-      )
-    );
+    infoBox('GitHub login', [
+      `Account: ${chalk.bold(answers.username)}`,
+      'Choose HTTPS in the gh prompt.',
+      'Complete browser or token login.',
+    ]);
     const loginResult = await authLogin();
     if (loginResult.missing) {
       fail(ghMissingMessage());
@@ -102,91 +116,83 @@ async function cmdAdd({ login = false } = {}) {
       return;
     }
   } else {
-    console.log(
-      chalk.gray(
-        `GitHub user "${answers.username}" is already logged in via gh — skipping login.`
-      )
-    );
-    console.log(
-      chalk.gray('Tip: choose "Add profile + force new login" to add another account.\n')
-    );
+    infoBox('Skipped login', [
+      `"${answers.username}" is already in gh auth.`,
+      'Use "Add profile (force login)" for another account.',
+    ]);
   }
 
   if (!isUserLoggedIn(answers.username)) {
     const active = getActiveUsername();
-    console.log(
-      chalk.yellow(
-        `Warning: "${answers.username}" not found in gh auth status` +
-          (active ? ` (active: ${active})` : '') +
-          '.'
-      )
-    );
-    const proceed = await confirm('Save the profile anyway?', false);
+    warnBox('Username not found in gh auth', [
+      `Expected: ${answers.username}`,
+      active ? `Active now: ${active}` : 'No active account detected.',
+    ]);
+    const proceed = await confirm('Save the profile anyway?', false, {
+      allowBack: interactive,
+    });
+    if (isBack(proceed)) return;
     if (!proceed) {
-      console.log(chalk.gray('Aborted.'));
+      console.log(chalk.gray('  Aborted.'));
       return;
     }
-  } else {
-    console.log(chalk.green(`Confirmed: ${answers.username} is available in gh auth.`));
   }
 
   addProfile(answers);
-  console.log(chalk.green(`\nProfile "${answers.name}" saved.`));
-  console.log(`  Switch:  ${chalk.bold(`ghsw use ${answers.name}`)}`);
-  console.log(`  Link:    ${chalk.bold(`ghsw link ${answers.name} /path/to/folder`)}`);
+  success(`Profile "${answers.name}" saved`, [
+    `GitHub  ${chalk.hex('#58a6ff')(answers.username)}`,
+    `Git     ${answers.gitName} <${answers.email}>`,
+    '',
+    `Next: ${chalk.bold(`ghsw use ${answers.name}`)}`,
+  ]);
 }
 
 async function cmdUse(profileName) {
   if (!requireGh()) return;
   const profile = getProfile(profileName);
   if (!profile) {
-    fail(`Profile "${profileName}" not found. Run: ghsw list`);
+    fail(`Profile "${profileName}" not found.`);
     return;
   }
-  if (!applyProfile(profile)) return;
-  console.log(chalk.green(`Switched to profile "${profile.name}"`));
-  console.log(`  GitHub:  ${profile.username}`);
-  console.log(`  git:     ${profile.gitName} <${profile.email}>`);
+  try {
+    await applyProfile(profile);
+    success(`Active profile: ${profile.name}`, [
+      `GitHub  ${chalk.hex('#58a6ff')(profile.username)}`,
+      `Git     ${profile.gitName} <${profile.email}>`,
+    ]);
+  } catch (err) {
+    fail(err.message || String(err));
+  }
 }
 
 async function cmdLink(profileName, folderPath) {
   const profile = getProfile(profileName);
   if (!profile) {
-    fail(`Profile "${profileName}" not found. Run: ghsw list`);
+    fail(`Profile "${profileName}" not found.`);
     return;
   }
   writeProfileGitconfig(profile);
   const { gitdir, includePath } = upsertIncludeIf(folderPath, profile.name);
-  console.log(chalk.green(`Linked folder → profile "${profile.name}"`));
-  console.log(`  gitdir:  ${gitdir}`);
-  console.log(`  config:  ${includePath}`);
-  console.log('');
-  console.log(chalk.yellow('Important caveat:'));
-  console.log(
-    '  includeIf auto-switches commit author (user.name / user.email) in this folder.'
-  );
-  console.log('  gh CLI auth is still GLOBAL. For push/pull as this account, run:');
-  console.log(chalk.bold(`    ghsw use ${profile.name}`));
-  console.log(
-    '  beforehand (unless HTTPS credentials are fully path-scoped via'
-  );
-  console.log(
-    '  credential.useHttpPath + per-remote stored tokens — which this sets'
-  );
-  console.log('  in the profile gitconfig, but does not replace gh auth switch).');
+  success(`Folder linked to "${profile.name}"`, [
+    `Path    ${gitdir}`,
+    `Config  ${includePath}`,
+  ]);
+  warnBox('Remember', [
+    'Commit author auto-switches in this folder.',
+    'gh auth is still global — run before push/pull:',
+    chalk.bold(`  ghsw use ${profile.name}`),
+  ]);
 }
 
 function cmdList() {
   const profiles = listProfiles();
   if (profiles.length === 0) {
-    console.log(chalk.gray('No profiles yet. Choose "Add profile" from the menu.'));
+    emptyState('No profiles yet.', 'Choose "Add profile" from the menu.');
     return;
   }
-  for (const p of profiles) {
-    console.log(chalk.bold(p.name));
-    console.log(`  git:    ${p.gitName} <${p.email}>`);
-    console.log(`  github: ${p.username}`);
-  }
+  section('Saved profiles');
+  const active = isGhInstalled() ? getActiveUsername() : null;
+  profileTable(profiles, active);
 }
 
 function cmdCurrent() {
@@ -194,118 +200,116 @@ function cmdCurrent() {
   const status = authStatus();
   const active = getActiveUsername();
   const gitUser = getGlobalUser();
+  const match = active
+    ? listProfiles().find(
+        (p) => p.username.toLowerCase() === active.toLowerCase()
+      )
+    : null;
 
-  console.log(chalk.bold('gh auth (github.com)'));
-  if (status.accounts.length === 0) {
-    console.log(
-      chalk.yellow('  Not authenticated. Run: gh auth login --hostname github.com')
-    );
-    console.log(chalk.gray('  Or choose "Add profile" in the menu.'));
-  } else {
-    for (const a of status.accounts) {
-      const mark = a.active ? chalk.green('*') : ' ';
-      console.log(
-        `  ${mark} ${a.username}${a.active ? chalk.gray(' (active)') : ''}`
-      );
-    }
-  }
+  section('Current status');
 
-  console.log(chalk.bold('\ngit global'));
-  console.log(`  user.name:  ${gitUser.name || chalk.gray('(unset)')}`);
-  console.log(`  user.email: ${gitUser.email || chalk.gray('(unset)')}`);
+  const ghRows = status.accounts.length
+    ? status.accounts.map((a) => [
+        a.active ? 'Active account' : 'Account',
+        a.active
+          ? chalk.green.bold(a.username)
+          : chalk.white(a.username),
+      ])
+    : [['GitHub', chalk.yellow('Not authenticated')]];
 
-  console.log(chalk.bold('\nghsw profile'));
-  if (active) {
-    const match = listProfiles().find(
-      (p) => p.username.toLowerCase() === active.toLowerCase()
-    );
-    if (match) {
-      console.log(
-        chalk.green(`  Active profile: ${match.name} (${match.username})`)
-      );
-    } else {
-      console.log(
-        chalk.yellow(
-          `  Active gh user "${active}" has no saved ghsw profile. Choose "Add profile".`
-        )
-      );
-    }
-  } else {
-    console.log(chalk.gray('  (none)'));
-  }
+  kvTable([
+    ...ghRows,
+    ['Git name', gitUser.name || chalk.gray('(unset)')],
+    ['Git email', gitUser.email || chalk.gray('(unset)')],
+    [
+      'ghsw profile',
+      match
+        ? chalk.green(`${match.name} (${match.username})`)
+        : active
+          ? chalk.yellow(`unmapped (${active})`)
+          : chalk.gray('(none)'),
+    ],
+  ]);
 }
 
 async function cmdTest(profileName) {
   if (!requireGh()) return;
   const profile = getProfile(profileName);
   if (!profile) {
-    fail(`Profile "${profileName}" not found. Run: ghsw list`);
+    fail(`Profile "${profileName}" not found.`);
     return;
   }
-  if (!applyProfile(profile)) return;
-  const result = apiUser();
-  if (!result.ok) {
-    fail(
-      [
-        'gh api user failed — auth may not be working.',
-        result.raw,
-        '',
-        'Try: gh auth login --hostname github.com',
-      ].join('\n')
+  try {
+    await applyProfile(profile);
+    const result = await withSpinner('Verifying with gh api user…', () =>
+      Promise.resolve(apiUser())
     );
-    return;
+    if (!result.ok) {
+      fail(
+        ['gh api user failed.', result.raw, '', 'Try: gh auth login'].join('\n')
+      );
+      return;
+    }
+    success(`Auth OK — ${profile.name}`, [
+      `API user  ${chalk.hex('#58a6ff')(result.login)}`,
+    ]);
+  } catch (err) {
+    fail(err.message || String(err));
   }
-  console.log(chalk.green(`Auth OK for profile "${profile.name}"`));
-  console.log(`  API username: ${result.login}`);
 }
 
 async function cmdEdit(profileName) {
   const profile = getProfile(profileName);
   if (!profile) {
-    fail(`Profile "${profileName}" not found. Run: ghsw list`);
+    fail(`Profile "${profileName}" not found.`);
     return;
   }
   const fields = await promptEditProfile(profile);
+  if (isBack(fields)) return;
   const updated = updateProfile(profile.name, fields);
   writeProfileGitconfig(updated);
-  console.log(chalk.green(`Updated profile "${updated.name}"`));
-  console.log(`  git: ${updated.gitName} <${updated.email}>`);
+  success(`Updated "${updated.name}"`, [
+    `Git  ${updated.gitName} <${updated.email}>`,
+  ]);
 }
 
-async function cmdRemove(profileName) {
+async function cmdRemove(profileName, { interactive = false } = {}) {
   const profile = getProfile(profileName);
   if (!profile) {
-    fail(`Profile "${profileName}" not found. Run: ghsw list`);
+    fail(`Profile "${profileName}" not found.`);
     return;
   }
   const ok = await confirm(
     `Remove profile "${profile.name}" (${profile.username})?`,
-    false
+    false,
+    { allowBack: interactive }
   );
+  if (isBack(ok)) return;
   if (!ok) {
-    console.log(chalk.gray('Aborted.'));
+    console.log(chalk.gray('  Aborted.'));
     return;
   }
 
   removeProfile(profile.name);
   deleteProfileGitconfig(profile.name);
   const n = removeIncludeIfForProfile(profile.name);
-  console.log(chalk.green(`Removed profile "${profile.name}".`));
-  if (n > 0) {
-    console.log(
-      chalk.gray(`  Removed ${n} includeIf block(s) from ~/.gitconfig`)
-    );
-  }
+  success(`Removed "${profile.name}"`, [
+    n > 0 ? `Cleaned ${n} includeIf block(s) from ~/.gitconfig` : 'Config cleaned.',
+  ]);
 
   if (isGhInstalled()) {
     const doLogout = await confirm(
       `Also run gh auth logout for ${profile.username}?`,
-      false
+      false,
+      { allowBack: interactive }
     );
+    if (isBack(doLogout)) return;
     if (doLogout) {
-      const result = authLogout(profile.username);
+      const result = await withSpinner(`Logging out ${profile.username}…`, () =>
+        Promise.resolve(authLogout(profile.username))
+      );
       if (result.ok) {
-        console.log(chalk.green(`Logged out ${profile.username} from gh.`));
+        success(`Logged out ${profile.username}`, []);
       } else {
         fail(result.stderr || result.stdout || 'gh auth logout failed');
       }
@@ -313,49 +317,72 @@ async function cmdRemove(profileName) {
   }
 }
 
-async function needProfileName(message) {
-  const name = await promptSelectProfile(message);
+async function needProfileName(message, backLabel = 'Back to menu') {
+  const name = await promptSelectProfile(message, { backLabel });
+  if (isBack(name)) return BACK;
   if (!name) {
-    console.log(chalk.yellow('No profiles yet. Choose "Add profile" first.'));
+    warnBox('No profiles', ['Add a profile first from the main menu.']);
     return null;
   }
   return name;
 }
 
-/**
- * Interactive app: menu → action → back to menu until Exit.
- */
+async function runLinkFlow() {
+  let profileName = await needProfileName('Link profile');
+  if (isBack(profileName) || !profileName) return;
+
+  while (true) {
+    const folder = await promptFolderPath({ backLabel: 'Back to profile list' });
+    if (isBack(folder)) {
+      profileName = await needProfileName('Link profile');
+      if (isBack(profileName) || !profileName) return;
+      continue;
+    }
+    await cmdLink(profileName, folder);
+    return;
+  }
+}
+
 async function runInteractive() {
-  console.log(chalk.bold('\nghsw') + chalk.gray(' — GitHub Switcher (HTTPS + gh)\n'));
+  printBanner();
 
   while (true) {
     process.exitCode = 0;
+
+    if (isGhInstalled()) {
+      const active = getActiveUsername();
+      const match = active
+        ? listProfiles().find(
+            (p) => p.username.toLowerCase() === active.toLowerCase()
+          )
+        : null;
+      printQuickStatus(active, match?.name ?? null);
+      console.log('');
+    }
+
     const action = await promptMainMenu();
     console.log('');
 
     try {
       switch (action) {
         case 'exit':
-          console.log(chalk.gray('Bye.'));
+          goodbye();
           return;
         case 'add':
-          await cmdAdd({ login: false });
+          await cmdAdd({ login: false, interactive: true });
           break;
         case 'add-login':
-          await cmdAdd({ login: true });
+          await cmdAdd({ login: true, interactive: true });
           break;
         case 'use': {
-          const name = await needProfileName('Switch to which profile?');
-          if (name) await cmdUse(name);
+          const name = await needProfileName('Switch to');
+          if (isBack(name) || !name) break;
+          await cmdUse(name);
           break;
         }
-        case 'link': {
-          const name = await needProfileName('Link which profile?');
-          if (!name) break;
-          const folder = await promptFolderPath();
-          await cmdLink(name, folder);
+        case 'link':
+          await runLinkFlow();
           break;
-        }
         case 'list':
           cmdList();
           break;
@@ -363,18 +390,21 @@ async function runInteractive() {
           cmdCurrent();
           break;
         case 'test': {
-          const name = await needProfileName('Test which profile?');
-          if (name) await cmdTest(name);
+          const name = await needProfileName('Test profile');
+          if (isBack(name) || !name) break;
+          await cmdTest(name);
           break;
         }
         case 'edit': {
-          const name = await needProfileName('Edit which profile?');
-          if (name) await cmdEdit(name);
+          const name = await needProfileName('Edit profile');
+          if (isBack(name) || !name) break;
+          await cmdEdit(name);
           break;
         }
         case 'remove': {
-          const name = await needProfileName('Remove which profile?');
-          if (name) await cmdRemove(name);
+          const name = await needProfileName('Remove profile');
+          if (isBack(name) || !name) break;
+          await cmdRemove(name, { interactive: true });
           break;
         }
         default:
@@ -394,7 +424,7 @@ program
     'GitHub Switcher — manage multiple GitHub accounts via HTTPS + gh CLI (no SSH)\n' +
       'Run with no arguments for an interactive menu.'
   )
-  .version('1.0.0')
+  .version('1.1.1')
   .action(async () => {
     await runInteractive();
   });

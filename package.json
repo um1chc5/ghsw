@@ -1,6 +1,6 @@
 {
-  "name": "ghsw",
-  "version": "1.0.0",
+  "name": "@um1chc5-aner/ghsw",
+  "version": "1.1.1",
   "description": "GitHub Switcher — manage multiple GitHub HTTPS profiles via gh CLI",
   "type": "module",
   "bin": {
@@ -39,9 +39,16 @@
     "url": "https://github.com/um1chc5/ghsw/issues"
   },
   "author": "um1chc5 (https://github.com/um1chc5)",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
+    "boxen": "^8.0.1",
     "chalk": "^5.4.1",
+    "cli-table3": "^0.6.5",
     "commander": "^13.1.0",
-    "inquirer": "^12.4.2"
+    "gradient-string": "^3.0.0",
+    "inquirer": "^12.4.2",
+    "ora": "^8.2.0"
   }
 }

@@ -100,7 +100,7 @@ Switched to profile "work"
 Global CLI — use from anywhere:
 
 ```bash
-npm install -g ghsw
+npm install -g @um1chc5-aner/ghsw
 ```
 
 Then:
@@ -110,7 +110,7 @@ ghsw
 ghsw --help
 ```
 
-> This is a **CLI tool**, not a library import. Install globally with `-g`.
+> Command is still `ghsw`. Package name is scoped because npm blocks the unscoped name `ghsw`.
 
 ### From source (clone + install)
 
