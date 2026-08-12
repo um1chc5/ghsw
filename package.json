@@ -1,0 +1,30 @@
+{
+  "name": "ghsw",
+  "version": "1.0.0",
+  "description": "GitHub Switcher — manage multiple GitHub HTTPS profiles via gh CLI",
+  "type": "module",
+  "bin": {
+    "ghsw": "./cli.js"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "node cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "github",
+    "gh",
+    "git",
+    "cli",
+    "accounts",
+    "switch"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "inquirer": "^12.4.2"
+  }
+}
