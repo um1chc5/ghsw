@@ -6,10 +6,11 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   bump:
-    # Prevent infinite loops: only bump when the push wasn't caused by our own release commit
+    # Prevent infinite loops: skip if push comes from our own bump commit
     if: "!contains(github.event.head_commit.message, 'chore(release)')"
     runs-on: ubuntu-latest
     steps:
@@ -28,21 +29,27 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # No git tag; just update package.json version and commit it.
+          # No git tag; just update package.json version.
           npm version patch --no-git-tag-version
 
-      - name: Commit & push
-        run: |
-          # package-lock may be ignored; package.json is what we care about.
-          git add package.json || true
+      - name: Create pull request for version bump
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(release): bump patch version"
+          branch: "chore/version-bump"
+          delete-branch: true
+          title: "chore(release): bump patch version"
+          body: |
+            Auto-generated patch version bump from `master` push.
+            This PR updates `package.json` version using `npm version patch --no-git-tag-version`.
+          add-paths: |
+            package.json
 
-          # If npm version produced no changes (rare), don't fail the workflow.
-          if git diff --cached --quiet; then
-            echo "No version changes to commit."
-            exit 0
-          fi
-
-          NEW_VER=$(node -p "require('./package.json').version")
-          git commit -m "chore(release): v${NEW_VER}"
-          git push origin HEAD:master
+      - name: Enable auto-merge on version bump PR
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
 
