@@ -14,7 +14,7 @@
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white" alt="Node" /></a>
   <a href="https://cli.github.com/"><img src="https://img.shields.io/badge/requires-gh%20CLI-000000?logo=github" alt="gh CLI" /></a>
   <a href="./package.json"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
-  <a href="https://github.com/um1chc5/ghsw"><img src="https://img.shields.io/badge/version-1.1.1-informational" alt="Version" /></a>
+  <a href="https://github.com/um1chc5/ghsw"><img src="https://img.shields.io/badge/version-1.1.2-informational" alt="Version" /></a>
 </p>
 
 <p align="center">
