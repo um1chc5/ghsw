@@ -293,6 +293,15 @@ npm uninstall -g ghsw
 
 ---
 
+## Release / npm publish
+
+1. In Cursor, run the project skill **pump-version** (or say “pump version”).
+2. Agent opens a PR that only bumps `package.json` (and README badge if needed).
+3. **You** review and merge the PR into `master`.
+4. Workflow [Publish to npm on merge](.github/workflows/publish-npm.yml) publishes `@um1chc5-aner/ghsw` if that version is not already on npm.
+
+---
+
 ## License
 
 MIT © [um1chc5](https://github.com/um1chc5)
