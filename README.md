@@ -1,63 +1,149 @@
-# ghsw — GitHub Switcher
+<p align="center">
+  <img src="https://img.shields.io/badge/ghsw-GitHub%20Switcher-24292f?style=for-the-badge&logo=github&logoColor=white" alt="ghsw" />
+</p>
 
-Manage **multiple GitHub accounts** with **HTTPS + token auth** via the [`gh`](https://cli.github.com/) CLI.  
-No SSH keys required.
+<h1 align="center">ghsw</h1>
 
-`ghsw use <profile>` switches **both**:
+<p align="center">
+  <strong>GitHub Switcher</strong> — jump between GitHub accounts in one command.<br/>
+  HTTPS + <code>gh</code> token auth. No SSH keys. Interactive menu or classic CLI.
+</p>
 
-1. **Auth** — `gh auth switch` (active token / account)
-2. **Git identity** — global `user.name` / `user.email`
+<p align="center">
+  <a href="https://github.com/um1chc5/ghsw"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-brightgreen" alt="Platform" /></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white" alt="Node" /></a>
+  <a href="https://cli.github.com/"><img src="https://img.shields.io/badge/requires-gh%20CLI-000000?logo=github" alt="gh CLI" /></a>
+  <a href="./package.json"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <a href="https://github.com/um1chc5/ghsw"><img src="https://img.shields.io/badge/version-1.0.0-informational" alt="Version" /></a>
+</p>
+
+<p align="center">
+  <a href="#-install">Install</a> ·
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-commands">Commands</a> ·
+  <a href="#-second-account-guide">Second account</a> ·
+  <a href="#-how-it-works">How it works</a>
+</p>
+
+---
+
+## Why ghsw?
+
+Switching GitHub identities usually means juggling tokens, `git config`, and hoping you didn’t push as the wrong user.
+
+**`ghsw use <profile>` does both at once:**
+
+| Layer | What changes |
+|-------|----------------|
+| **Auth** | `gh auth switch` — active HTTPS token / account |
+| **Git identity** | global `user.name` + `user.email` |
+
+Optional **per-folder** links so commit author follows the repo you’re in.
+
+---
+
+## Features
+
+- **Interactive app** — run `ghsw` and pick an action (arrow keys + Enter)
+- **Instant switch** — auth + git identity in one step
+- **Multi-account ready** — `add` / `add --login` walks you through a second `gh auth login`
+- **Per-folder identity** — `link` via git `includeIf` (no duplicate blocks)
+- **Safety nets** — confirms before remove/logout; timestamped `~/.gitconfig` backups
+- **HTTPS-first** — built on the official `gh` CLI; no SSH key swapping
+
+---
+
+## Demo
+
+```text
+$ ghsw
+
+ghsw — GitHub Switcher (HTTPS + gh)
+
+? What do you want to do?
+❯ Switch profile (use) — auth + git identity
+  Show current status
+  List profiles
+  Add profile (login if needed)
+  Add profile + force new login
+  Link folder to profile
+  Test profile auth
+  Edit profile name/email
+  Remove profile
+ ──────────────
+  Exit
+```
+
+```bash
+$ ghsw use work
+Switched to profile "work"
+  GitHub:  your-work-user
+  git:     Ada Lovelace <ada@company.com>
+```
 
 ---
 
 ## Requirements
 
-- Node.js 18+
-- [GitHub CLI (`gh`)](https://cli.github.com/) on PATH
-- Git
+| Tool | Notes |
+|------|--------|
+| **Node.js** 18+ | Runtime |
+| **[GitHub CLI (`gh`)](https://cli.github.com/)** | Auth backend (must be on `PATH`) |
+| **Git** | Config + `includeIf` |
 
 ---
 
 ## Install
 
-### Mac / Linux
+### One-liner (clone + install)
 
 ```bash
+git clone https://github.com/um1chc5/ghsw.git
+cd ghsw
+```
+
+**macOS / Linux (Ubuntu included)**
+
+```bash
+chmod +x install.sh
 ./install.sh
 ```
 
-### Windows (PowerShell)
+**Windows (PowerShell)**
 
 ```powershell
 .\install.ps1
 ```
 
-### npm (any platform)
+**npm (any platform)**
 
 ```bash
+npm install
 npm install -g .
-# or from the package directory after npm install
+```
+
+Verify:
+
+```bash
+ghsw --help
+ghsw          # interactive menu
 ```
 
 ---
 
-## Quick start — interactive menu
+## Quick start
 
-Just run:
+### Interactive (recommended)
 
 ```bash
 ghsw
 ```
 
-You’ll get a selectable menu (arrow keys + Enter): switch, status, add, link, test, edit, remove, exit. After each action it returns to the menu.
+Choose **Add profile** → fill name / email / GitHub username → complete `gh` login if needed → **Switch profile**.
 
-Subcommands still work (`ghsw use work`, `ghsw list`, …).
-
-### First account (menu or CLI)
+### Classic CLI
 
 ```bash
-ghsw                  # choose "Add profile"
-# or:
 ghsw add
 ghsw use personal
 ghsw current
@@ -66,51 +152,42 @@ ghsw test personal
 
 ---
 
-## Adding a **second** GitHub account (guide)
+## Second account guide
 
-You already have one account in `gh`. To add another:
+Already logged into one GitHub account? Add another:
 
-### Option A — recommended (built into `ghsw add`)
+### A — Recommended
 
 ```bash
 ghsw add
+# or from the menu: "Add profile (login if needed)"
 ```
 
-1. Enter a profile alias (e.g. `work`), git name, email, and the **second** GitHub username.
-2. If that username is **not** already logged in via `gh`, ghsw launches:
-
-   ```bash
-   gh auth login --hostname github.com
-   ```
-
-3. In the login flow:
-   - Choose **HTTPS** (not SSH)
-   - Authenticate as the **second** account (browser or token)
-4. ghsw confirms via `gh auth status` and saves the profile.
-5. Switch:
-
-   ```bash
-   ghsw use work
-   ```
-
-### Option B — force a new login anytime
+1. Profile alias (e.g. `work`), git name, email, **second** GitHub username  
+2. If that user isn’t in `gh` yet → launches `gh auth login --hostname github.com`  
+3. Choose **HTTPS**, finish browser/token login as the second account  
+4. Switch:
 
 ```bash
-ghsw add --login
-```
-
-Always opens `gh auth login`, even if some accounts already exist. Use this when adding another account on purpose.
-
-### Option C — login with `gh` first, then save profile
-
-```bash
-gh auth login --hostname github.com
-gh auth status
-ghsw add          # will skip login if that username is already present
 ghsw use work
 ```
 
-### Verify both accounts
+### B — Force a new login
+
+```bash
+ghsw add --login
+# menu: "Add profile + force new login"
+```
+
+### C — Login with `gh` first
+
+```bash
+gh auth login --hostname github.com
+ghsw add          # skips login if username already present
+ghsw use work
+```
+
+### Verify
 
 ```bash
 gh auth status
@@ -124,68 +201,67 @@ ghsw test personal
 
 ## Commands
 
-| Command | What it does |
-|---------|----------------|
+| Command | Description |
+|---------|-------------|
+| `ghsw` | Open interactive menu |
+| `ghsw menu` | Same as above |
 | `ghsw add [--login]` | Create profile; login via `gh` if needed |
 | `ghsw use <name>` | Switch **auth + global git name/email** |
-| `ghsw link <name> <folder>` | Per-folder commit identity via `includeIf` |
-| `ghsw list` | List profiles |
+| `ghsw link <name> <folder>` | Per-folder commit identity (`includeIf`) |
+| `ghsw list` | List saved profiles |
 | `ghsw current` | Active `gh` user + matching profile + global git |
-| `ghsw test <name>` | Switch + `gh api user` sanity check |
+| `ghsw test <name>` | Switch + `gh api user` check |
 | `ghsw edit <name>` | Update stored name/email |
 | `ghsw remove <name>` | Remove profile (optional `gh auth logout`) |
 
-Profiles live in `~/.ghsw/config.json`.
+Profiles are stored in `~/.ghsw/config.json`.
 
 ---
 
-## How per-folder linking works
+## How it works
 
-```bash
-ghsw link work ~/code/company-app
-```
-
-ghsw:
-
-1. Backs up `~/.gitconfig` to a timestamped `.bak`
-2. Writes `~/.gitconfig-work` with `user.name`, `user.email`, and `credential.useHttpPath = true`
-3. Adds (or updates in place) an `includeIf "gitdir:..."` block in `~/.gitconfig` for that folder
-
-Inside that folder, **commits** pick up the linked profile’s name/email automatically.
-
-### Caveat (important)
-
-**`gh` token auth is global per switch.**  
-Folder linking does **not** by itself change which GitHub account HTTPS push/pull uses.
-
-For push/pull as that account, run:
+### Global switch
 
 ```bash
 ghsw use work
 ```
 
-before operating in that folder (unless you have fully configured path-scoped HTTPS credentials).  
-`credential.useHttpPath = true` in the generated gitconfig helps Git store credentials per repo path, but it does **not** replace `gh auth switch`.
+1. `gh auth switch --hostname github.com --user <username>`  
+2. `git config --global user.name` / `user.email` from the profile  
 
----
+### Per-folder link
 
-## Auth model
+```bash
+ghsw link work ~/code/company-app
+```
 
-| Layer | What switches it |
-|-------|------------------|
-| Commit author (`user.name` / `user.email`) | `ghsw use` (global) or `ghsw link` (per folder via `includeIf`) |
-| HTTPS token / API (`gh`) | `ghsw use` → `gh auth switch` only |
+1. Backs up `~/.gitconfig` → timestamped `.bak`  
+2. Writes `~/.gitconfig-work` with `user.name`, `user.email`, `credential.useHttpPath = true`  
+3. Upserts one `includeIf "gitdir:…"` block (no duplicates on re-link)  
 
-This tool intentionally uses **HTTPS + `gh` tokens**, not SSH key swapping.
+Commits in that folder pick up the linked author automatically.
+
+> [!IMPORTANT]
+> **`gh` token auth is still global per switch.**  
+> Folder linking does **not** alone change which account HTTPS push/pull uses.  
+> Run `ghsw use <profile>` before push/pull for that account.  
+> `credential.useHttpPath` helps path-scoped credentials; it does **not** replace `gh auth switch`.
+
+### Auth model
+
+| Concern | Switched by |
+|---------|-------------|
+| Commit author | `ghsw use` (global) or `ghsw link` (per folder) |
+| HTTPS token / API | `ghsw use` → `gh auth switch` only |
 
 ---
 
 ## Safety
 
-- Confirms before `remove` and before `gh auth logout`
-- Backs up `~/.gitconfig` before edits
-- Repeated `ghsw link` on the same folder **updates** the existing `includeIf` block (no duplicates)
-- Clear errors if `gh` is missing or unauthenticated
+- Confirm before `remove` and before `gh auth logout`
+- Timestamped backup of `~/.gitconfig` before edits
+- Re-`link` updates the existing `includeIf` in place
+- Clear setup hints if `gh` is missing or unauthenticated
 
 ---
 
@@ -193,6 +269,13 @@ This tool intentionally uses **HTTPS + `gh` tokens**, not SSH key swapping.
 
 ```bash
 npm uninstall -g ghsw
-# optional: rm -rf ~/.ghsw
-# optional: remove includeIf blocks / ~/.gitconfig-<profile> by hand or via ghsw remove
+# optional cleanup:
+# rm -rf ~/.ghsw
+# ghsw remove <name>   # or manually drop includeIf / ~/.gitconfig-<name>
 ```
+
+---
+
+## License
+
+MIT © [um1chc5](https://github.com/um1chc5)
