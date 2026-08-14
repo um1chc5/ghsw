@@ -52,6 +52,13 @@ import {
   warnBox,
   withSpinner,
 } from './lib/ui.js';
+import {
+  PKG_NAME,
+  compareSemver,
+  getLatestVersion,
+  getLocalPackage,
+  installLatestGlobal,
+} from './lib/selfUpdate.js';
 
 const program = new Command();
 
@@ -327,6 +334,71 @@ async function needProfileName(message, backLabel = 'Back to menu') {
   return name;
 }
 
+/**
+ * Check npm for a newer ghsw and optionally install globally.
+ * @param {{ force?: boolean, interactive?: boolean }} [opts]
+ */
+async function cmdUpdate({ force = false, interactive = false } = {}) {
+  const local = getLocalPackage();
+  const latest = await withSpinner('Checking npm for updates…', () =>
+    Promise.resolve(getLatestVersion())
+  );
+
+  if (!latest) {
+    fail(
+      [
+        `Could not reach npm for ${PKG_NAME}.`,
+        'Check your network, then try: npm view @um1chc5-aner/ghsw version',
+      ].join('\n')
+    );
+    return;
+  }
+
+  const cmp = compareSemver(latest, local.version);
+  infoBox('ghsw versions', [
+    `Installed  ${local.version}`,
+    `Latest     ${latest}`,
+  ]);
+
+  if (cmp <= 0 && !force) {
+    success('Already up to date', [`Running v${local.version}`]);
+    return;
+  }
+
+  if (interactive) {
+    const ok = await confirm(
+      `Install ${PKG_NAME}@${latest} globally?`,
+      true,
+      { allowBack: true }
+    );
+    if (isBack(ok) || !ok) {
+      console.log(chalk.gray('  Aborted.'));
+      return;
+    }
+  }
+
+  console.log(chalk.cyan(`\nInstalling ${PKG_NAME}@${latest}…\n`));
+  const result = installLatestGlobal();
+
+  if (!result.ok) {
+    fail(
+      [
+        'Global install failed.',
+        result.stderr || result.stdout,
+        '',
+        'Try manually:',
+        `  npm install -g ${PKG_NAME}@latest`,
+      ].join('\n')
+    );
+    return;
+  }
+
+  success(`Updated to v${latest}`, [
+    'Restart ghsw to use the new version.',
+    `  ghsw --version`,
+  ]);
+}
+
 async function runLinkFlow() {
   let profileName = await needProfileName('Link profile');
   if (isBack(profileName) || !profileName) return;
@@ -407,6 +479,9 @@ async function runInteractive() {
           await cmdRemove(name, { interactive: true });
           break;
         }
+        case 'update':
+          await cmdUpdate({ interactive: true });
+          break;
         default:
           break;
       }
@@ -424,7 +499,7 @@ program
     'GitHub Switcher — manage multiple GitHub accounts via HTTPS + gh CLI (no SSH)\n' +
       'Run with no arguments for an interactive menu.'
   )
-  .version('1.1.1')
+  .version('1.1.3')
   .action(async () => {
     await runInteractive();
   });
@@ -521,6 +596,18 @@ program
   .action(async (profileName) => {
     try {
       await cmdRemove(profileName);
+    } catch (err) {
+      fail(err.message || String(err));
+    }
+  });
+
+program
+  .command('update')
+  .description('Check npm and update ghsw globally to the latest version')
+  .option('--force', 'Reinstall even if already on latest')
+  .action(async (opts) => {
+    try {
+      await cmdUpdate({ force: Boolean(opts.force), interactive: false });
     } catch (err) {
       fail(err.message || String(err));
     }
