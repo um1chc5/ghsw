@@ -224,6 +224,7 @@ ghsw test personal
 | `ghsw menu` | Same as above |
 | `ghsw add [--login]` | Create profile; login via `gh` if needed |
 | `ghsw use <name>` | Switch **auth + global git name/email** |
+| `ghsw clone [repo]` | Clone repo into current directory (via `gh`) |
 | `ghsw link <name> <folder>` | Per-folder commit identity (`includeIf`) |
 | `ghsw list` | List saved profiles |
 | `ghsw current` | Active `gh` user + matching profile + global git |

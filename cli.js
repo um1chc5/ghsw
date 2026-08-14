@@ -2,13 +2,14 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import path from 'node:path';
 import {
   addProfile,
   getProfile,
   listProfiles,
   removeProfile,
   updateProfile,
-} from './lib/profiles.js';
+} from './lib/profiles/index.js';
 import {
   apiUser,
   authLogin,
@@ -19,7 +20,9 @@ import {
   ghMissingMessage,
   isGhInstalled,
   isUserLoggedIn,
-} from './lib/gh.js';
+  listRepos,
+  repoClone,
+} from './lib/gh/index.js';
 import {
   deleteProfileGitconfig,
   getGlobalUser,
@@ -27,17 +30,18 @@ import {
   setGlobalUser,
   upsertIncludeIf,
   writeProfileGitconfig,
-} from './lib/git.js';
+} from './lib/git/index.js';
 import {
   BACK,
   confirm,
   isBack,
   promptAddProfile,
+  promptCloneRepo,
   promptEditProfile,
   promptFolderPath,
   promptMainMenu,
   promptSelectProfile,
-} from './lib/prompts.js';
+} from './lib/prompts/index.js';
 import {
   emptyState,
   errorBox,
@@ -51,14 +55,15 @@ import {
   success,
   warnBox,
   withSpinner,
-} from './lib/ui.js';
+} from './lib/ui/index.js';
 import {
   PKG_NAME,
   compareSemver,
   getLatestVersion,
   getLocalPackage,
   installLatestGlobal,
-} from './lib/selfUpdate.js';
+} from './lib/self-update/index.js';
+import { openFolder } from './lib/open/index.js';
 
 const program = new Command();
 
@@ -76,7 +81,7 @@ function requireGh() {
 }
 
 /**
- * @param {import('./lib/profiles.js').Profile} profile
+ * @param {import('./lib/profiles/index.js').Profile} profile
  */
 async function applyProfile(profile) {
   return withSpinner(`Switching to ${profile.username}…`, async () => {
@@ -338,6 +343,105 @@ async function needProfileName(message, backLabel = 'Back to menu') {
  * Check npm for a newer ghsw and optionally install globally.
  * @param {{ force?: boolean, interactive?: boolean }} [opts]
  */
+async function cmdClone(repo, { interactive = false } = {}) {
+  if (!requireGh()) return;
+
+  // Switch profile first so the repo list matches the right account
+  if (interactive) {
+    const profiles = listProfiles();
+    if (profiles.length > 0) {
+      const switchFirst = await confirm(
+        'Switch profile before cloning?',
+        false,
+        { allowBack: true }
+      );
+      if (isBack(switchFirst)) return;
+      if (switchFirst) {
+        const name = await needProfileName('Clone as which profile?');
+        if (isBack(name) || !name) return;
+        await cmdUse(name);
+        if (process.exitCode) return;
+      }
+    }
+  }
+
+  let target = repo;
+  if (!target) {
+    let repos = [];
+    try {
+      const listed = await withSpinner('Loading your GitHub repos…', () =>
+        Promise.resolve(listRepos({ limit: 80 }))
+      );
+      if (listed.missing) {
+        fail(ghMissingMessage());
+        return;
+      }
+      if (!listed.ok) {
+        warnBox('Could not list repos', [
+          listed.raw || 'gh repo list failed',
+          'You can still enter owner/name or a URL manually.',
+        ]);
+      } else {
+        repos = listed.repos;
+      }
+    } catch (err) {
+      warnBox('Could not list repos', [err.message || String(err)]);
+    }
+
+    target = await promptCloneRepo(repos);
+    if (isBack(target)) return;
+  }
+
+  const active = getActiveUsername();
+  infoBox('Clone repo', [
+    `Repo     ${target}`,
+    `Into     ${process.cwd()}`,
+    `Account  ${active || chalk.yellow('(unknown)')}`,
+  ]);
+
+  console.log('');
+  const result = await repoClone(target);
+  if (result.missing) {
+    fail(ghMissingMessage());
+    return;
+  }
+  if (!result.ok) {
+    fail(
+      [
+        `Failed to clone ${target}.`,
+        'Check the repo name and that your active gh account can access it.',
+        `Active: ${active || '(none)'} — try: ghsw use <profile>`,
+      ].join('\n')
+    );
+    return;
+  }
+
+  const folderName = target
+    .replace(/\.git$/, '')
+    .split('/')
+    .pop();
+  const dest = path.resolve(process.cwd(), folderName);
+  success(`Cloned ${target}`, [
+    `Path  ${dest}`,
+    active ? `Auth ${active}` : '',
+  ].filter(Boolean));
+
+  if (process.stdin.isTTY) {
+    const shouldOpen = await confirm(`Open ${folderName}?`, true);
+    if (shouldOpen && !isBack(shouldOpen)) {
+      const opened = openFolder(dest);
+      if (opened.ok) {
+        infoBox('Opened folder', [`Via  ${opened.via}`, dest]);
+      } else {
+        warnBox('Could not open folder', [
+          dest,
+          'Install the Cursor CLI (`cursor`) or open it yourself.',
+        ]);
+      }
+    }
+  }
+}
+
 async function cmdUpdate({ force = false, interactive = false } = {}) {
   const local = getLocalPackage();
   const latest = await withSpinner('Checking npm for updates…', () =>
@@ -452,6 +556,9 @@ async function runInteractive() {
           await cmdUse(name);
           break;
         }
+        case 'clone':
+          await cmdClone(undefined, { interactive: true });
+          break;
         case 'link':
           await runLinkFlow();
           break;
@@ -523,6 +630,18 @@ program
   .action(async (profileName) => {
     try {
       await cmdUse(profileName);
+    } catch (err) {
+      fail(err.message || String(err));
+    }
+  });
+
+program
+  .command('clone')
+  .description('Clone a GitHub repo into the current directory (via gh)')
+  .argument('[repo]', 'owner/name or URL')
+  .action(async (repo) => {
+    try {
+      await cmdClone(repo, { interactive: false });
     } catch (err) {
       fail(err.message || String(err));
     }

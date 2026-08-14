@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareSemver } from '../lib/selfUpdate.js';
+import { compareSemver } from '../lib/self-update/index.js';
 
 describe('selfUpdate compareSemver', () => {
   it('orders versions', () => {
