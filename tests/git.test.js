@@ -15,7 +15,7 @@ const {
   removeIncludeIfForProfile,
   upsertIncludeIf,
   writeProfileGitconfig,
-} = await import('../lib/git.js');
+} = await import('../lib/git/index.js');
 
 describe('git includeIf', () => {
   after(() => {

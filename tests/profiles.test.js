@@ -14,7 +14,7 @@ const {
   loadConfig,
   removeProfile,
   updateProfile,
-} = await import('../lib/profiles.js');
+} = await import('../lib/profiles/index.js');
 
 describe('profiles', () => {
   after(() => {
